@@ -52,37 +52,105 @@ public extension Portfolio {
         }
     }
 
-    /// Buy-only rebalance in whole shares: greedily buys the share that most reduces the
-    /// squared distance of equity, bonds and cash from their targets (cash targets zero).
-    /// Locked holdings keep their "To buy" untouched and are never picked.
+    /// Buy-only rebalance in whole shares, minimising the squared distance of equity, bonds
+    /// and cash (target zero) from their targets. Locked holdings are never picked and keep
+    /// their "To buy".
     mutating func suggestBuys() {
         for index in holdings.indices where !holdings[index].isLocked {
             holdings[index].toBuy = 0
         }
-        let total = totalAfter
-        guard total > 0 else { return }
+        guard totalAfter > 0 else { return }
+        let buys = BuyPlanner(portfolio: self).plan()
+        for index in holdings.indices where !holdings[index].isLocked {
+            holdings[index].toBuy = buys[index]
+        }
+    }
+}
 
-        var classValues = Dictionary(uniqueKeysWithValues: AssetClass.allCases.map { assetClass in
-            (assetClass, holdings.filter { $0.assetClass == assetClass }.reduce(0) { $0 + $1.value })
+/// Greedy fill, then local search: give back one share and refill without that ETF,
+/// keeping the change whenever it lands closer to the targets.
+private struct BuyPlanner {
+    let prices: [Double]
+    let classes: [AssetClass]
+    let buyable: [Bool]
+    let baseValues: [AssetClass: Double]
+    let targets: [AssetClass: Double]
+    let budget: Double
+
+    init(portfolio: Portfolio) {
+        let total = portfolio.totalAfter
+        prices = portfolio.holdings.map(\.price)
+        classes = portfolio.holdings.map(\.assetClass)
+        buyable = portfolio.holdings.map { !$0.isLocked && $0.price > 0 }
+        baseValues = Dictionary(uniqueKeysWithValues: AssetClass.allCases.map { assetClass in
+            (assetClass, portfolio.holdings.filter { $0.assetClass == assetClass }.reduce(0) { $0 + $1.value })
         })
-        var budget = cashAfter
+        targets = Dictionary(uniqueKeysWithValues: AssetClass.allCases.map { ($0, portfolio.classTarget($0) * total) })
+        budget = portfolio.cashAfter
+    }
 
-        for _ in 0..<1_000_000 {
+    func plan() -> [Int] {
+        var best = fill(Array(repeating: 0, count: prices.count), excluding: nil)
+        var bestError = error(best)
+        for _ in 0..<10_000 {
+            var improved = false
+            for index in best.indices where best[index] > 0 {
+                var trial = best
+                trial[index] -= 1
+                trial = fill(trial, excluding: index)
+                let trialError = error(trial)
+                if trialError < bestError - 1e-6 {
+                    best = trial
+                    bestError = trialError
+                    improved = true
+                    break
+                }
+            }
+            if !improved { break }
+        }
+        return best
+    }
+
+    private func fill(_ start: [Int], excluding excluded: Int?) -> [Int] {
+        var buys = start
+        var values = classValues(buys)
+        var cash = cashLeft(buys)
+        while true {
             var best: (index: Int, change: Double)?
-            for (index, holding) in holdings.enumerated() {
-                let price = holding.price
-                guard !holding.isLocked, price > 0, price <= budget + 1e-9 else { continue }
-                let excess = classValues[holding.assetClass, default: 0] - classTarget(holding.assetClass) * total
-                let change = 2 * price * (excess - budget) + 2 * price * price
+            for index in prices.indices where buyable[index] && index != excluded {
+                let price = prices[index]
+                guard price <= cash + 1e-9 else { continue }
+                let excess = values[classes[index], default: 0] - targets[classes[index], default: 0]
+                let change = 2 * price * (excess - cash) + 2 * price * price
                 if change < -1e-9, change < (best?.change ?? 0) {
                     best = (index, change)
                 }
             }
-            guard let best else { break }
-            let holding = holdings[best.index]
-            holdings[best.index].toBuy += 1
-            classValues[holding.assetClass, default: 0] += holding.price
-            budget -= holding.price
+            guard let best else { return buys }
+            buys[best.index] += 1
+            values[classes[best.index], default: 0] += prices[best.index]
+            cash -= prices[best.index]
+        }
+    }
+
+    private func classValues(_ buys: [Int]) -> [AssetClass: Double] {
+        var values = baseValues
+        for index in buys.indices {
+            values[classes[index], default: 0] += Double(buys[index]) * prices[index]
+        }
+        return values
+    }
+
+    private func cashLeft(_ buys: [Int]) -> Double {
+        budget - buys.indices.reduce(0) { $0 + Double(buys[$1]) * prices[$1] }
+    }
+
+    private func error(_ buys: [Int]) -> Double {
+        let values = classValues(buys)
+        let cash = cashLeft(buys)
+        return AssetClass.allCases.reduce(cash * cash) { sum, assetClass in
+            let gap = values[assetClass, default: 0] - targets[assetClass, default: 0]
+            return sum + gap * gap
         }
     }
 }

@@ -110,6 +110,24 @@ private func percent(_ fraction: Double) -> Double {
         #expect(portfolio.cashAfter >= 0)
     }
 
+    @Test func backsOutOfAnExpensiveShareThatOvershoots() {
+        var portfolio = Portfolio(
+            holdings: [
+                Holding(name: "Large equity", assetClass: .equity, shares: 12, quote: quote(753.97)),
+                Holding(name: "Small equity", assetClass: .equity, shares: 80, quote: quote(48.66)),
+                Holding(name: "Bonds", assetClass: .bonds, shares: 25, quote: quote(116.17)),
+            ],
+            cash: 23.15,
+            deposit: 1500,
+            equityTarget: 0.8
+        )
+        portfolio.suggestBuys()
+        #expect(portfolio.holdings[0].toBuy <= 1)
+        #expect(portfolio.holdings[2].toBuy > 0)
+        #expect(abs(portfolio.classWeight(.equity) - 0.8) < 0.015)
+        #expect(portfolio.cashAfter >= 0)
+    }
+
     @Test func neverBuysALockedHolding() {
         var portfolio = example(toBuyB: 0, equityTarget: 0.3)
         portfolio.holdings[2].isLocked = true
