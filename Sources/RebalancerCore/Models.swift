@@ -60,16 +60,34 @@ public struct Holding: Codable, Equatable, Identifiable, Sendable {
     public var assetClass: AssetClass
     public var shares: Double
     public var toBuy: Int
+    public var isLocked: Bool
     public var quote: Quote?
 
-    public init(id: UUID = UUID(), name: String = "", isin: String = "", assetClass: AssetClass = .equity, shares: Double = 0, toBuy: Int = 0, quote: Quote? = nil) {
+    public init(id: UUID = UUID(), name: String = "", isin: String = "", assetClass: AssetClass = .equity, shares: Double = 0, toBuy: Int = 0, isLocked: Bool = false, quote: Quote? = nil) {
         self.id = id
         self.name = name
         self.isin = isin
         self.assetClass = assetClass
         self.shares = shares
         self.toBuy = toBuy
+        self.isLocked = isLocked
         self.quote = quote
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, isin, assetClass, shares, toBuy, isLocked, quote
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        isin = try container.decode(String.self, forKey: .isin)
+        assetClass = try container.decode(AssetClass.self, forKey: .assetClass)
+        shares = try container.decode(Double.self, forKey: .shares)
+        toBuy = try container.decode(Int.self, forKey: .toBuy)
+        isLocked = try container.decodeIfPresent(Bool.self, forKey: .isLocked) ?? false
+        quote = try container.decodeIfPresent(Quote.self, forKey: .quote)
     }
 
     public var price: Double { quote?.price ?? 0 }

@@ -11,6 +11,18 @@ struct HoldingsTable: View {
         let portfolio = model.portfolio
 
         Table($model.portfolio.holdings, selection: $selection) {
+            TableColumn("") { $holding in
+                Button {
+                    holding.isLocked.toggle()
+                } label: {
+                    Image(systemName: holding.isLocked ? "lock.fill" : "lock.open")
+                        .foregroundStyle(holding.isLocked ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                }
+                .buttonStyle(.borderless)
+                .help(holding.isLocked ? "Locked: Suggest Buys won't buy this ETF. Click to unlock." : "Lock to stop Suggest Buys from buying this ETF")
+            }
+            .width(22)
+
             TableColumn("ETF") { $holding in
                 ETFCell(holding: holding, error: model.errors[holding.id])
             }
@@ -73,6 +85,7 @@ struct HoldingsTable: View {
         .contextMenu(forSelectionType: Holding.ID.self) { ids in
             if ids.count == 1, let id = ids.first, let holding = portfolio.holdings.first(where: { $0.id == id }) {
                 Button("Edit…") { onEdit(holding) }
+                Button(holding.isLocked ? "Unlock" : "Lock") { model.toggleLock(id) }
                 Button("Move Up") { model.move(id, by: -1) }
                 Button("Move Down") { model.move(id, by: 1) }
                 Divider()

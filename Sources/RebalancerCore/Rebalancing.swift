@@ -54,21 +54,24 @@ public extension Portfolio {
 
     /// Buy-only rebalance in whole shares: greedily buys the share that most reduces the
     /// squared distance of equity, bonds and cash from their targets (cash targets zero).
+    /// Locked holdings keep their "To buy" untouched and are never picked.
     mutating func suggestBuys() {
-        clearBuys()
+        for index in holdings.indices where !holdings[index].isLocked {
+            holdings[index].toBuy = 0
+        }
         let total = totalAfter
         guard total > 0 else { return }
 
         var classValues = Dictionary(uniqueKeysWithValues: AssetClass.allCases.map { assetClass in
             (assetClass, holdings.filter { $0.assetClass == assetClass }.reduce(0) { $0 + $1.value })
         })
-        var budget = available
+        var budget = cashAfter
 
         for _ in 0..<1_000_000 {
             var best: (index: Int, change: Double)?
             for (index, holding) in holdings.enumerated() {
                 let price = holding.price
-                guard price > 0, price <= budget + 1e-9 else { continue }
+                guard !holding.isLocked, price > 0, price <= budget + 1e-9 else { continue }
                 let excess = classValues[holding.assetClass, default: 0] - classTarget(holding.assetClass) * total
                 let change = 2 * price * (excess - budget) + 2 * price * price
                 if change < -1e-9, change < (best?.change ?? 0) {

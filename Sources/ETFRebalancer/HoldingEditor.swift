@@ -43,6 +43,8 @@ struct HoldingEditor: View {
                     LabeledContent("Shares held") {
                         NumberField(value: $draft.shares, width: 100)
                     }
+                    Toggle("Locked", isOn: $draft.isLocked)
+                        .help("Suggest Buys won't buy a locked ETF")
                 }
             }
             .formStyle(.grouped)

@@ -98,6 +98,11 @@ final class AppModel {
         }
     }
 
+    func toggleLock(_ id: Holding.ID) {
+        guard let index = portfolio.holdings.firstIndex(where: { $0.id == id }) else { return }
+        portfolio.holdings[index].isLocked.toggle()
+    }
+
     func move(_ id: Holding.ID, by offset: Int) {
         guard let index = portfolio.holdings.firstIndex(where: { $0.id == id }) else { return }
         let destination = index + offset

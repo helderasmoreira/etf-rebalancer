@@ -109,6 +109,30 @@ private func percent(_ fraction: Double) -> Double {
         portfolio.suggestBuys()
         #expect(portfolio.cashAfter >= 0)
     }
+
+    @Test func neverBuysALockedHolding() {
+        var portfolio = example(toBuyB: 0, equityTarget: 0.3)
+        portfolio.holdings[2].isLocked = true
+        portfolio.suggestBuys()
+        #expect(portfolio.holdings[2].toBuy == 0)
+    }
+
+    @Test func keepsManualBuysOnALockedHolding() {
+        var portfolio = example(toBuyB: 4)
+        portfolio.holdings[1].isLocked = true
+        portfolio.suggestBuys()
+        #expect(portfolio.holdings[1].toBuy == 4)
+        #expect(portfolio.cashAfter >= 0)
+        #expect(portfolio.buyCost > 200)
+    }
+
+    @Test func buysNothingWhenLockedBuysUseTheMoney() {
+        var portfolio = example(toBuyB: 30)
+        portfolio.holdings[1].isLocked = true
+        portfolio.suggestBuys()
+        #expect(portfolio.holdings[0].toBuy == 0)
+        #expect(portfolio.holdings[2].toBuy == 0)
+    }
 }
 
 @Suite struct TargetTests {
@@ -122,6 +146,12 @@ private func percent(_ fraction: Double) -> Double {
         var portfolio = example(equityTarget: 0.5)
         portfolio.useCurrentAllocationAsTarget()
         #expect(abs(portfolio.equityTarget - 0.75) < 1e-9)
+    }
+
+    @Test func decodesOldHoldingsAsUnlocked() throws {
+        let json = #"{"id":"6F9619FF-8B86-D011-B42D-00C04FC964FF","name":"Equity","isin":"US0378331005","assetClass":"equity","shares":10,"toBuy":0}"#
+        let holding = try JSONDecoder().decode(Holding.self, from: Data(json.utf8))
+        #expect(holding.isLocked == false)
     }
 
     @Test func decodesOldFilesWithoutASplit() throws {

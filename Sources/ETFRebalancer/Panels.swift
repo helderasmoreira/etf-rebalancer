@@ -46,7 +46,7 @@ struct CashPanel: View {
                         model.portfolio.suggestBuys()
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(portfolio.holdings.allSatisfy { $0.quote == nil })
+                    .disabled(portfolio.holdings.allSatisfy { $0.quote == nil || $0.isLocked })
                     .help("Fill “To buy” with the whole shares that bring you closest to your equity/bonds split without selling anything")
 
                     Button("Clear") {
@@ -109,7 +109,10 @@ struct AllocationPanel: View {
                             .monospacedDigit()
                             .foregroundStyle(.secondary)
                     }
-                    Slider(value: $model.portfolio.equityTarget, in: 0...1, step: 0.01) {
+                    Slider(value: Binding(
+                        get: { model.portfolio.equityTarget },
+                        set: { model.portfolio.equityTarget = ($0 * 100).rounded() / 100 }
+                    ), in: 0...1) {
                         Text("Target split")
                     } minimumValueLabel: {
                         Text("Bonds").font(.caption)
